@@ -1,0 +1,9 @@
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+
+*.ps1   text
+*.psm1  text
+*.psd1  text
+*.ps1xml text
+*.json  text
+*.md    text

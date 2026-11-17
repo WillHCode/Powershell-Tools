@@ -1,0 +1,33 @@
+*.bak
+*.bak.*
+*.old
+*.new
+*.zip
+
+# Par défaut les rapports vont dans ~\.secaudit, mais -OutputPath peut viser le dépôt
+security-reports/
+.secaudit/
+*.sarif
+results_json.json
+gitleaks.json
+findings.json
+sbom*.json
+
+# Logs
+*.log
+
+# Éditeur / OS
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Configs locales : noms de contextes, chemins perso... jamais commitées
+# (seuls les modèles *.env.example sont versionnés)
+Configs/*.env
+!Configs/*.env.example
+*.env
+!*.env.example
