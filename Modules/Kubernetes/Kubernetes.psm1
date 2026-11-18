@@ -149,10 +149,14 @@ function kubectl {
     if ($isWrite -and (Test-KubeProtected $inv.Context)) {
         if (-not (Confirm-KubeProd -Context $inv.Context -Action "kubectl $($args -join ' ')")) { return }
     }
-    & $script:KubectlBin @args
+    if ($MyInvocation.ExpectingInput) { $input | & $script:KubectlBin @args }
+    else { & $script:KubectlBin @args }
 }
 
-function k { kubectl @args }
+function k {
+    if ($MyInvocation.ExpectingInput) { $input | kubectl @args }
+    else { kubectl @args }
+}
 
 function helm {
     if (-not $script:HelmBin) {
@@ -163,7 +167,8 @@ function helm {
     if ($inv.Verb -and $script:HelmWriteVerbs.Contains($inv.Verb) -and (Test-KubeProtected $inv.Context)) {
         if (-not (Confirm-KubeProd -Context $inv.Context -Action "helm $($args -join ' ')")) { return }
     }
-    & $script:HelmBin @args
+    if ($MyInvocation.ExpectingInput) { $input | & $script:HelmBin @args }
+    else { & $script:HelmBin @args }
 }
 
 function kube-staging {
