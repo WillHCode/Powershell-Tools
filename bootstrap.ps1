@@ -9,16 +9,31 @@
 #
 #  Il charge les profils dans l'ordre de pwsh, en sautant ceux qui sont sur le réseau.
 #  Sur un poste sans redirection, le résultat est identique à un pwsh normal.
+#
+#  Si un profil a été sauté, $PROFILE désigne ensuite profile.ps1 du toolkit (au lieu du
+#  chemin réseau, qui laisserait croire qu'il a été chargé) ; $PROFILE.Skipped liste les
+#  profils ignorés. Les autres propriétés ($PROFILE.CurrentUserCurrentHost...) sont inchangées.
 
+$__skipped = @()
 foreach ($__profilePath in $PROFILE.AllUsersAllHosts, $PROFILE.AllUsersCurrentHost,
                            $PROFILE.CurrentUserAllHosts, $PROFILE.CurrentUserCurrentHost) {
     if (-not (Test-Path -LiteralPath $__profilePath)) { continue }
 
     $__root = [IO.Path]::GetPathRoot($__profilePath)
     if (([uri]$__profilePath).IsUnc -or ([IO.DriveInfo]::new($__root).DriveType -eq 'Network')) {
-        Write-Verbose "Profil réseau ignoré : $__profilePath"
+        $__skipped += $__profilePath
         continue
     }
     . $__profilePath
 }
-Remove-Variable __profilePath, __root -ErrorAction Ignore
+
+if ($__skipped) {
+    $__target = if ($global:ToolkitRoot) { Join-Path $global:ToolkitRoot 'profile.ps1' } else { "$PSScriptRoot\profile.ps1" }
+    $__new = [psobject]::new($__target)
+    foreach ($__prop in $PROFILE.PSObject.Properties.Match('*', 'NoteProperty')) {
+        $__new | Add-Member -NotePropertyName $__prop.Name -NotePropertyValue $__prop.Value
+    }
+    $__new | Add-Member -NotePropertyName Skipped -NotePropertyValue $__skipped -Force
+    $global:PROFILE = $__new
+}
+Remove-Variable __skipped, __profilePath, __root, __target, __new, __prop -ErrorAction Ignore
