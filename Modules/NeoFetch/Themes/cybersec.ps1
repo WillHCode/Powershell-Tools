@@ -44,6 +44,6 @@
         $git = Get-GitHeadInfo
         if ($git) { New-FetchLine 'Dépôt' "$($git.Repo) ($($git.Branch))" }
 
-        New-FetchLine 'Commandes' 'audit-repo · audit-full -Html · trivy · gitleaks · semgrep' -State dim
+        New-FetchLine 'Commandes' 'audit-repo · audit-full -Html · trivy · gitleaks · trufflehog · semgrep' -State dim
     }
 }

@@ -55,16 +55,17 @@ Tous les scanners tournent dans Docker, le code est monté **en lecture seule**.
 | Commande | Effet |
 |---|---|
 | `audit-repo` | Audit rapide : Trivy + Gitleaks + Semgrep |
-| `audit-full` | Audit complet : les 6 scanners |
+| `audit-full` | Audit complet : les 7 scanners |
 | `audit-full -Html` | Idem, avec un rapport HTML filtrable qui s'ouvre dans le navigateur |
 | `audit-full -MinSeverity HIGH` | N'affiche que HIGH et CRITICAL |
+| `audit-full -TruffleHogVerify` | TruffleHog vérifie si les secrets trouvés sont actifs (accès réseau) |
 | `audit-full -ForceAll` | Lance OSV et Checkov même sans fichiers de dépendances / IaC détectés |
 | `Invoke-SecurityAudit -Tools gitleaks,trivy` | Ne lance que certains scanners |
 | `audit-full -FailOn HIGH; exit $LASTEXITCODE` | Pour un hook git ou la CI : échoue s'il reste une alerte ≥ HIGH |
 | `Get-SecAuditReport` | Historique des audits (date, cible, durée, alertes) |
 | `Get-SecAuditReport -Last 1 \| ii` | Ouvre le dossier du dernier rapport |
 | `Update-SecAuditImages` | Met à jour les scanners et fige leurs versions (à faire ~1×/mois) |
-| `trivy`, `gitleaks`, `semgrep`, `osv-scanner`, `checkov`, `syft` | Les outils bruts, comme en ligne de commande classique |
+| `trivy`, `gitleaks`, `trufflehog`, `semgrep`, `osv-scanner`, `checkov`, `syft` | Les outils bruts, comme en ligne de commande classique |
 
 - **Rapports** : `<SECAUDIT_REPORT_ROOT>\<dossier scanné>\<date>\`, avec un `metadata.json`
   (date, chemin complet de la cible, durée, git, image de chaque scanner, résumé).

@@ -21,13 +21,14 @@ Terminal incluant des outils d'audit de sécurité lancé via docker pour du sca
 | Commande | Effet |
 |---|---|
 | `audit-repo` | Trivy + Gitleaks + Semgrep (rapide) |
-| `audit-full -Html` | Les 6 outils + rapport HTML filtrable |
+| `audit-full -Html` | Les 7 outils + rapport HTML filtrable |
 | `audit-full -ForceAll` | Lance aussi OSV/Checkov sans détection préalable |
 | `Invoke-SecurityAudit -Tools gitleaks,trivy` | Sélection d'outils |
 | `audit-full -MinSeverity HIGH` | Masque MEDIUM/LOW |
+| `audit-full -TruffleHogVerify` | TruffleHog teste les secrets trouvés auprès des fournisseurs (réseau activé) |
 | `audit-full -FailOn HIGH; exit $LASTEXITCODE` | Hook pre-push / CI |
 | `audit-full \| Where-Object Outil -like 'Trivy*' \| Export-Csv x.csv` | Les résultats sont des objets |
-| `trivy`, `gitleaks`, `semgrep`, `osv-scanner`, `checkov`, `syft` | Wrappers interactifs, comme avant |
+| `trivy`, `gitleaks`, `trufflehog`, `semgrep`, `osv-scanner`, `checkov`, `syft` | Wrappers interactifs, comme avant |
 | `Update-SecAuditImages` | Mise à jour volontaire des scanners |
 | `Get-SecAuditReport` | Historique des audits (date, cible, durée, nombre d'alertes) |
 | `Get-SecAuditReport mon-repo -Last 1 \| ii` | Ouvre le dossier du dernier rapport d'un dépôt |
@@ -44,7 +45,7 @@ dans `Configs\cybersec.env` (défaut : `~\.secaudit\reports`) :
         ├── metadata.json        quand, quoi, comment, combien de temps
         ├── findings.json        alertes normalisées
         ├── audit-report.html    avec -Html
-        ├── trivy.json, gitleaks.json, …   rapports bruts
+        ├── trivy.json, gitleaks.json, trufflehog.jsonl, …   rapports bruts
         └── trivy.log, …         sortie console de chaque scanner
 ```
 
@@ -60,6 +61,16 @@ dans `Configs\cybersec.env` (défaut : `~\.secaudit\reports`) :
 | `files` | Fichiers produits |
 
 `-OutputPath` permet toujours de forcer un autre dossier pour un scan donné.
+
+### TruffleHog
+
+- Mode `git` (tout l'historique) si le dossier est un dépôt, sinon `filesystem`.
+- Par défaut `--no-verification` + `--network none` : alertes en **HIGH**.
+- Avec `-TruffleHogVerify`, chaque secret est testé auprès de son fournisseur
+  (le secret part donc sur le réseau) : actif = **CRITICAL**, invalide = **MEDIUM**,
+  test impossible = **HIGH**.
+- TruffleHog n'a pas d'option `--redact` : les champs `Raw` / `RawV2` (secret en clair)
+  sont retirés de `trufflehog.jsonl` avant écriture sur disque.
 
 ### Faux positifs : `.secaudit-ignore` à la racine du dépôt
 

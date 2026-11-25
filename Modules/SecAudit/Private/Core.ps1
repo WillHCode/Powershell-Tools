@@ -38,7 +38,8 @@ $script:ImageLock    = $null
 # Références d'images, 'Update-SecAuditImages' les résout en digest et les lock dans ~/.secaudit/images.lock.json 
 $script:ToolImages = [ordered]@{
     trivy    = 'aquasec/trivy:latest'
-    gitleaks = 'zricethezav/gitleaks:latest'
+    gitleaks   = 'zricethezav/gitleaks:latest'
+    trufflehog = 'trufflesecurity/trufflehog:latest'
     semgrep  = 'semgrep/semgrep:latest'
     osv      = 'ghcr.io/google/osv-scanner:latest'
     checkov  = 'bridgecrew/checkov:latest'
@@ -50,7 +51,7 @@ $script:SeverityRank = @{ CRITICAL = 5; HIGH = 4; MEDIUM = 3; LOW = 2; UNKNOWN =
 # Images / Docker
 function Get-SecAuditImage {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][ValidateSet('trivy', 'gitleaks', 'semgrep', 'osv', 'checkov', 'syft')][string]$Tool)
+    param([Parameter(Mandatory)][ValidateSet('trivy', 'gitleaks', 'trufflehog', 'semgrep', 'osv', 'checkov', 'syft')][string]$Tool)
 
     if ($null -eq $script:ImageLock) {
         $script:ImageLock = @{}
@@ -74,6 +75,8 @@ function Invoke-SecAuditContainer {
         - un dossier de sortie dédié sur /out
         - no-new-privileges, et --network none quand l'outil n'a pas besoin du réseau
       La sortie console de l'outil part dans <out>/<tool>.log. Retourne le code de sortie.
+      Avec -StdoutFile, stdout (le rapport) est séparé de stderr (le log) et chaque ligne passe
+      d'abord par -StdoutFilter : rien n'atteint le disque sans être filtré (ex. secrets en clair).
     #>
     param(
         [Parameter(Mandatory)][string]$Tool,
@@ -81,7 +84,9 @@ function Invoke-SecAuditContainer {
         [Parameter(Mandatory)][string]$OutDir,
         [string[]]$ToolArgs = @(),
         [string[]]$ExtraDockerArgs = @(),
-        [switch]$Offline
+        [switch]$Offline,
+        [string]$StdoutFile,
+        [scriptblock]$StdoutFilter = { $args[0] }
     )
     $PSNativeCommandUseErrorActionPreference = $false
     $ErrorActionPreference = 'Continue'
@@ -100,7 +105,12 @@ function Invoke-SecAuditContainer {
     $dockerArgs += $ToolArgs
 
     $log = Join-Path $OutDir "$Tool.log"
-    & docker @dockerArgs 2>&1 | ForEach-Object { "$_" } | Set-Content -LiteralPath $log -Encoding utf8
+    if ($StdoutFile) {
+        & docker @dockerArgs 2> $log | ForEach-Object { & $StdoutFilter "$_" } | Where-Object { $_ } |
+            Set-Content -LiteralPath (Join-Path $OutDir $StdoutFile) -Encoding utf8
+    } else {
+        & docker @dockerArgs 2>&1 | ForEach-Object { "$_" } | Set-Content -LiteralPath $log -Encoding utf8
+    }
     $LASTEXITCODE
 }
 

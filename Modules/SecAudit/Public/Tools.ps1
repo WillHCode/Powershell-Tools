@@ -6,6 +6,7 @@ function Invoke-ScannerTool {
 
 function Invoke-Trivy      { Invoke-ScannerTool trivy    -DockerArgs '-v', 'trivy-cache:/root/.cache/' -ToolArgs $args }
 function Invoke-Gitleaks   { Invoke-ScannerTool gitleaks -DockerArgs '-e', 'GIT_CONFIG_COUNT=1', '-e', 'GIT_CONFIG_KEY_0=safe.directory', '-e', 'GIT_CONFIG_VALUE_0=*' -ToolArgs $args }
+function Invoke-TruffleHog { Invoke-ScannerTool trufflehog -DockerArgs '-e', 'GIT_CONFIG_COUNT=1', '-e', 'GIT_CONFIG_KEY_0=safe.directory', '-e', 'GIT_CONFIG_VALUE_0=*' -ToolArgs $args }
 function Invoke-Semgrep    { Invoke-ScannerTool semgrep  -DockerArgs '-e', 'SEMGREP_SEND_METRICS=off' -ToolArgs (@('semgrep') + $args) }
 function Invoke-OsvScanner { Invoke-ScannerTool osv      -ToolArgs $args }
 function Invoke-Syft       { Invoke-ScannerTool syft     -ToolArgs $args }

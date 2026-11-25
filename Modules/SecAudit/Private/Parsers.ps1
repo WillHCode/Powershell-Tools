@@ -37,6 +37,42 @@ function Read-GitleaksReport([string]$File) {
     }
 }
 
+function ConvertTo-RedactedTruffleHogLine([string]$Line) {
+    <#
+      TruffleHog n'a pas d'option --redact. Liste blanche plutôt que noire : Raw, RawV2, SecretParts...
+      contiennent le secret en clair, et de nouveaux champs apparaissent selon les versions.
+      'Redacted' est la partie affichable choisie par le détecteur (ID de clé, URI masquée, ...).
+    #>
+    if (-not $Line.StartsWith('{')) { return }
+    try { $o = $Line | ConvertFrom-Json -Depth 32 } catch { return }
+    if (-not $o.PSObject.Properties['DetectorName']) { return }
+    $o | Select-Object SourceMetadata, SourceName, DetectorType, DetectorName, DecoderName,
+                       Verified, VerificationError, Redacted, ExtraData |
+        ConvertTo-Json -Depth 32 -Compress
+}
+
+function Read-TruffleHogReport([string]$File) {
+    foreach ($line in Get-Content -LiteralPath $File) {
+        if (-not $line.Trim()) { continue }
+        $r = $line | ConvertFrom-Json -Depth 32
+        $d = $r.SourceMetadata.Data
+        $src = if ($d.Git) { $d.Git } elseif ($d.Filesystem) { $d.Filesystem } else { $null }
+        $loc = if ($src.line) { "$($src.file):$($src.line)" } else { [string]$src.file }
+
+        # Vérifié = secret actif confirmé
+        $state, $sev = if ($r.Verified) { 'VÉRIFIÉ', 'CRITICAL' }
+                       elseif ($r.VerificationError) { 'vérif. impossible', 'HIGH' }
+                       elseif ($script:TruffleHogVerified) { 'invalide', 'MEDIUM' }
+                       else { 'non vérifié', 'HIGH' }
+        $msg = "$($r.DetectorName) [$state]"
+        if ($r.DecoderName -and $r.DecoderName -ne 'PLAIN') { $msg += " (encodage $($r.DecoderName))" }
+        if ($d.Git.commit) {
+            $msg += " (commit $($d.Git.commit.Substring(0, [Math]::Min(8, $d.Git.commit.Length))), $($d.Git.email), $($d.Git.timestamp))"
+        }
+        New-Finding 'TruffleHog' $sev $r.DetectorName $loc $msg
+    }
+}
+
 function Read-SemgrepReport([string]$File) {
     $r = Read-JsonReport $File
     foreach ($s in @($r.results)) {

@@ -1,7 +1,7 @@
 function Invoke-SecurityAudit {
     <#
     .SYNOPSIS
-      Audit de sécurité d'un dépôt : Trivy, Gitleaks, Semgrep, OSV-Scanner, Checkov, Syft.
+      Audit de sécurité d'un dépôt : Trivy, Gitleaks, TruffleHog, Semgrep, OSV-Scanner, Checkov, Syft.
     .DESCRIPTION
       Tous les scanners tournent en conteneur, source montée en lecture seule.
       Les rapports bruts (JSON), les logs de chaque outil, findings.json, metadata.json et
@@ -16,12 +16,14 @@ function Invoke-SecurityAudit {
       Invoke-SecurityAudit -Tools gitleaks,trivy -MinSeverity HIGH
     .EXAMPLE
       Invoke-SecurityAudit -FailOn HIGH; exit $LASTEXITCODE     # usage CI / hook
+    .EXAMPLE
+      Invoke-SecurityAudit -Tools trufflehog -TruffleHogVerify   # teste les secrets trouvés auprès des fournisseurs
     #>
     [CmdletBinding()]
     param(
         [string]$Path = $PWD.ProviderPath,
 
-        [ValidateSet('trivy', 'gitleaks', 'semgrep', 'osv', 'checkov', 'syft')]
+        [ValidateSet('trivy', 'gitleaks', 'trufflehog', 'semgrep', 'osv', 'checkov', 'syft')]
         [string[]]$Tools,
 
         # Équivalent de l'ancien audit-repo : trivy + gitleaks + semgrep
@@ -38,6 +40,8 @@ function Invoke-SecurityAudit {
         [string]$TrivySeverity = 'HIGH,CRITICAL',
 
         [string]$SemgrepConfig = 'p/default',
+
+        [switch]$TruffleHogVerify,
 
         [string]$OutputPath,
 
@@ -85,10 +89,14 @@ function Invoke-SecurityAudit {
 
     $plan = if ($Tools) { $Tools }
             elseif ($Quick) { 'trivy', 'gitleaks', 'semgrep' }
-            else { 'trivy', 'gitleaks', 'semgrep', 'osv', 'checkov', 'syft' }
+            else { 'trivy', 'gitleaks', 'trufflehog', 'semgrep', 'osv', 'checkov', 'syft' }
     $explicit = [bool]$Tools -or $ForceAll
 
     $glMode = if ($inv.IsGit) { 'git' } else { 'dir' }
+    $thArgs = if ($inv.IsGit) { @('git', 'file:///src') } else { @('filesystem', '/src') }
+    $thArgs += @('--json', '--no-update')
+    if (-not $TruffleHogVerify) { $thArgs += '--no-verification' }
+    $script:TruffleHogVerified = [bool]$TruffleHogVerify
     $steps = @{
         trivy = @{
             Label  = 'Trivy (CVE, secrets, config)'
@@ -103,6 +111,13 @@ function Invoke-SecurityAudit {
             # --redact : ATTENTION le secret n'est jamais écrit en clair dans le rapport
             Args   = @($glMode, '.', '--redact', '--no-banner', '--exit-code', '0',
                        '--report-format', 'json', '--report-path', '/out/gitleaks.json')
+        }
+        trufflehog = @{
+            Label  = "TruffleHog (secrets, mode $($thArgs[0])$(if ($TruffleHogVerify) { ', vérification' }))"
+            Report = 'trufflehog.jsonl'; Parser = 'Read-TruffleHogReport'; Offline = -not $TruffleHogVerify
+            # Pas de --redact chez TruffleHog : stdout est filtré (Raw/RawV2 retirés) avant écriture
+            Stdout = 'trufflehog.jsonl'; Filter = ${function:ConvertTo-RedactedTruffleHogLine}
+            Args   = $thArgs
         }
         semgrep = @{
             Label  = "Semgrep (SAST, $SemgrepConfig)"
@@ -147,8 +162,10 @@ function Invoke-SecurityAudit {
 
         Write-Host "$prefix..." -ForegroundColor Cyan -NoNewline
         $sw   = [System.Diagnostics.Stopwatch]::StartNew()
-        $code = Invoke-SecAuditContainer -Tool $t -Source $src -OutDir $out -ToolArgs $s.Args `
-                    -ExtraDockerArgs @($s.Docker | Where-Object { $_ }) -Offline:([bool]$s.Offline)
+        $run  = @{ Tool = $t; Source = $src; OutDir = $out; ToolArgs = $s.Args
+                   ExtraDockerArgs = @($s.Docker | Where-Object { $_ }); Offline = [bool]$s.Offline }
+        if ($s.Stdout) { $run.StdoutFile = $s.Stdout; $run.StdoutFilter = $s.Filter }
+        $code = Invoke-SecAuditContainer @run
         $sw.Stop()
         $duree = '{0:n0}s' -f $sw.Elapsed.TotalSeconds
         $reportFile = Join-Path $out $s.Report
@@ -244,6 +261,7 @@ function Invoke-SecurityAudit {
             minSeverity   = $MinSeverity
             trivySeverity = $TrivySeverity
             semgrepConfig = $SemgrepConfig
+            trufflehogVerify = [bool]$TruffleHogVerify
             failOn        = if ($FailOn) { $FailOn } else { $null }
             exitCode      = $exitCode
             imagesLocked  = Test-Path -LiteralPath $script:LockFile
