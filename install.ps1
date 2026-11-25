@@ -94,6 +94,17 @@ else {
     if ($p.ExitCode -eq 0) { Write-Step 'Profil système' } else { Write-Step "Profil système : échec (code $($p.ExitCode))" TODO }
 }
 
+# 6. Documents redirigé sur le réseau : pwsh y chargerait un profil utilisateur APRÈS le toolkit
+$userProfile = $PROFILE.CurrentUserCurrentHost
+$onNetwork = ([uri]$userProfile).IsUnc -or
+    ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($userProfile)).DriveType -eq 'Network')
+if (-not $onNetwork) { Write-Step 'Profil utilisateur local' SKIP }
+else {
+    Write-Step "Profil utilisateur sur le réseau ($userProfile)" TODO
+    Write-Host "         Lancer les terminaux avec : pwsh -NoProfile -NoExit -Command `". '$root\bootstrap.ps1'`"" -ForegroundColor Yellow
+    Write-Host '         (Windows Terminal, VS Code : voir README, section Documents redirigé)' -ForegroundColor Yellow
+}
+
 Write-Host "`nÀ faire :" -ForegroundColor Cyan
 Write-Host '  - compléter les fichiers Configs\*.env marqués TODO'
 Write-Host '  - fermer VS Code / Windows Terminal (PATH et variables relus au démarrage)'

@@ -130,6 +130,33 @@ Le script est relançable sans risque. Il :
 
 Ensuite : **fermer complètement** VS Code / Windows Terminal, puis une fois `Update-SecAuditImages`.
 
+### Documents redirigé sur un partage réseau
+
+Si une GPO redirige Documents vers un partage (`\\serveur\...`), `$PROFILE` y pointe : pwsh charge
+ce profil **après** le toolkit, et il peut écraser `kubectl`, le prompt, etc. Il est souvent en
+lecture seule, et rien de local (variables, secrets) ne doit y aller. `install.ps1` le signale (étape 6).
+
+Les terminaux se lancent alors avec `-NoProfile` + [bootstrap.ps1](bootstrap.ps1), qui charge les
+profils dans l'ordre de pwsh en sautant ceux qui sont sur le réseau. Les lanceurs `Custom Terminals`
+le font déjà. Pour les autres :
+
+- **Windows Terminal** (profil PowerShell 7 → *Ligne de commande*) :
+  `pwsh.exe -NoLogo -NoProfile -NoExit -Command ". 'C:\tools\powershell-tools\bootstrap.ps1'"`
+- **VS Code** (`settings.json`) :
+
+  ```jsonc
+  "terminal.integrated.profiles.windows": {
+      "PowerShell (local)": {
+          "path": "pwsh.exe",
+          "args": ["-NoLogo", "-NoProfile", "-NoExit", "-Command",
+                   "if (Test-Path 'C:\\tools\\powershell-tools\\bootstrap.ps1') { . 'C:\\tools\\powershell-tools\\bootstrap.ps1' }"]
+      }
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell (local)"
+  ```
+
+`pwsh` lancé tel quel (Win+R, raccourci) charge toujours le profil réseau : passer par `wt`.
+
 ---
 
 ## Configuration
@@ -198,6 +225,7 @@ Le dossier des configs peut être déplacé avec la variable `TOOLKIT_CONFIG_DIR
 powershell-tools\
 ├── install.ps1                installation sur le poste
 ├── profile.ps1                le profil (chargé par le profil système)
+├── bootstrap.ps1              démarrage sans les profils réseau (Documents redirigé)
 ├── Configs\
 │   ├── *.env.example          modèles versionnés
 │   └── *.env                  vraies valeurs (ignorées par git)
